@@ -6,3 +6,6 @@ server.log
 .env
 *.db-journal
 *.db
+.env
+logs/
+*.log
