@@ -104,3 +104,12 @@ def get_task(task_id: int):
     if row is None:
         raise not_found(task_id)
     return row_to_task(row)
+
+
+# --- create (SQL INSERT) --------------------------------------------------------
+
+@app.post("/tasks", status_code=201)
+def create_task(payload: TaskCreate):
+    with db.connect() as conn:
+        cur = conn.execute("INSERT INTO tasks (title, done) VALUES (?, 0)", (payload.title,))
+        return {"id": cur.lastrowid, "title": payload.title, "done": False}
