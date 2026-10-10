@@ -138,3 +138,15 @@ def delete_task(task_id: int):
         if cur.rowcount == 0:
             raise not_found(task_id)
     return None
+
+
+# --- extras ---------------------------------------------------------------------
+
+@app.get("/stats")
+def stats():
+    # counted by SQLite, not in Python
+    with db.connect() as conn:
+        total, done = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(done), 0) FROM tasks"
+        ).fetchone()
+    return {"total": total, "done": done, "open": total - done}
