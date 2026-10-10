@@ -67,7 +67,7 @@ def health():
 
 # --- AI triage (Assignment 17) ----------------------------------------------------
 
-@app.post("/tasks/triage", response_model=None, tags=["ai"])  # Stage 2: raw text, fixed in Stage 3
+@app.post("/tasks/triage", response_model=TriageOut, tags=["ai"])
 def triage_task(payload: TriageIn):
     """One task text in, one validated verdict out. Never returns raw model text."""
     return triage(payload.text)

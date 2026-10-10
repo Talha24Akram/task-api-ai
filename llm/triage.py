@@ -1,14 +1,23 @@
-"""The triage job. Stage 2: prompt file + model call; the raw answer is returned for inspection only."""
+"""The triage job: build prompt -> call model -> parse + validate -> repair once -> else 422 + quarantine."""
 import json
 import os
+import time
 from pathlib import Path
 
+from fastapi import HTTPException
+
 from llm import client
+from llm.parse import BadModelOutput, parse_triage
 from llm.schema import TriageOut
 
 PROMPT_VERSION = os.getenv("PROMPT_VERSION", "triage-v1")
-PROMPT_DIR = Path(__file__).resolve().parent.parent / "prompts"
+ROOT = Path(__file__).resolve().parent.parent
+PROMPT_DIR = ROOT / "prompts"
+QUARANTINE = ROOT / "logs" / "quarantine.jsonl"
 STUB = TriageOut(category="chore", priority="normal", confidence=0.9, reason="Stub answer: no model was called.")
+
+REPAIR = ("Your previous answer was rejected for this reason: {error}. "
+          "Return only corrected JSON matching the schema.")
 
 
 def load_prompt() -> str:
@@ -21,7 +30,29 @@ def build_messages(text: str) -> list[dict]:
             {"role": "user", "content": json.dumps({"text": text})}]
 
 
-def triage(text: str):
+def quarantine(text: str, raw_outputs: list[str], error: str) -> None:
+    QUARANTINE.parent.mkdir(exist_ok=True)
+    line = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "prompt_version": PROMPT_VERSION,
+            "input": text, "raw_outputs": raw_outputs, "error": error}
+    with QUARANTINE.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def triage(text: str) -> TriageOut:
     if os.getenv("LLM_STUB") == "1":
         return STUB
-    return {"model_text": client.complete(build_messages(text)).text}  # temporary, replaced in Stage 3
+    messages = build_messages(text)
+    first = client.complete(messages).text
+    try:
+        return parse_triage(first)
+    except BadModelOutput as e:
+        error = str(e)
+    # repair exactly once: same prompt + the broken output + the exact error
+    messages += [{"role": "assistant", "content": first},
+                 {"role": "user", "content": REPAIR.format(error=error)}]
+    second = client.complete(messages).text
+    try:
+        return parse_triage(second)
+    except BadModelOutput as e:
+        quarantine(text, [first, second], str(e))
+        raise HTTPException(status_code=422, detail="The model did not return a valid triage result; it has been quarantined for review.")
