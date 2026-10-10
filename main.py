@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 
 import db
+from llm.schema import TriageIn, TriageOut
+from llm.triage import triage
 
 
 @asynccontextmanager
@@ -61,6 +63,14 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# --- AI triage (Assignment 17) ----------------------------------------------------
+
+@app.post("/tasks/triage", response_model=TriageOut, tags=["ai"])
+def triage_task(payload: TriageIn):
+    """One task text in, one validated verdict out. Never returns raw model text."""
+    return triage(payload.text)
 
 
 # --- error handling (same JSON shape as Assignment 1) -------------------------
