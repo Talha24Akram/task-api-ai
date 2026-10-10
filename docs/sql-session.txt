@@ -1,0 +1,29 @@
+$ sqlite3 tasks.db   # API running against the same file
+sqlite> SELECT * FROM tasks;
+id     title      done
+--  ------------  ----
+ 1  Buy milk         0
+ 2  Walk the dog     0
+ 3  Write README     1
+ 4  Persist me       0
+
+sqlite> SELECT * FROM tasks WHERE done = 1;
+id     title      done
+--  ------------  ----
+ 3  Write README     1
+
+sqlite> SELECT COUNT(*) FROM tasks;
+COUNT(*)
+--------
+       4
+
+sqlite> UPDATE tasks SET done = 1;
+
+$ curl localhost:8000/tasks
+[{"id":1,"title":"Buy milk","done":true},{"id":2,"title":"Walk the dog","done":true},{"id":3,"title":"Write README","done":true},{"id":4,"title":"Persist me","done":true}]
+
+sqlite> DELETE FROM tasks WHERE done = 1;
+
+$ curl localhost:8000/tasks
+[]
+
