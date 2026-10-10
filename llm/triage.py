@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from llm import client
+from llm.client import LLMError, LLMTimeout
 from llm.parse import BadModelOutput, parse_triage
 from llm.schema import TriageOut
 
@@ -15,6 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 PROMPT_DIR = ROOT / "prompts"
 QUARANTINE = ROOT / "logs" / "quarantine.jsonl"
 STUB = TriageOut(category="chore", priority="normal", confidence=0.9, reason="Stub answer: no model was called.")
+
+FALLBACK = TriageOut(category="other", priority="normal", confidence=0.0,
+                     reason="AI triage is switched off; please triage this task by hand.")
 
 REPAIR = ("Your previous answer was rejected for this reason: {error}. "
           "Return only corrected JSON matching the schema.")
@@ -38,11 +42,26 @@ def quarantine(text: str, raw_outputs: list[str], error: str) -> None:
         f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
 
+def enabled() -> bool:
+    return os.getenv("LLM_ENABLED", "true").strip().lower() not in ("false", "0", "no", "off")
+
+
+def call_model(messages: list[dict], repair: bool = False) -> str:
+    try:
+        return client.complete(messages, prompt_version=PROMPT_VERSION, repair=repair).text
+    except LLMTimeout as e:
+        raise HTTPException(status_code=504, detail=f"The model took too long to answer ({e}). Try again later.")
+    except LLMError as e:
+        raise HTTPException(status_code=502, detail=f"The AI provider failed: {e}.")
+
+
 def triage(text: str) -> TriageOut:
+    if not enabled():  # kill switch: no model call, deterministic answer
+        return FALLBACK
     if os.getenv("LLM_STUB") == "1":
         return STUB
     messages = build_messages(text)
-    first = client.complete(messages).text
+    first = call_model(messages)
     try:
         return parse_triage(first)
     except BadModelOutput as e:
@@ -50,7 +69,7 @@ def triage(text: str) -> TriageOut:
     # repair exactly once: same prompt + the broken output + the exact error
     messages += [{"role": "assistant", "content": first},
                  {"role": "user", "content": REPAIR.format(error=error)}]
-    second = client.complete(messages).text
+    second = call_model(messages, repair=True)
     try:
         return parse_triage(second)
     except BadModelOutput as e:

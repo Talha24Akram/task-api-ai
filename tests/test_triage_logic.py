@@ -21,7 +21,7 @@ def api(tmp_path, monkeypatch):
     def script(*answers):
         it = iter(answers)
 
-        def fake(messages):
+        def fake(messages, **kw):
             calls.append(messages)
             return Completion(text=next(it))
         monkeypatch.setattr(client, "complete", fake)
