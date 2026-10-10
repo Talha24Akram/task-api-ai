@@ -1,0 +1,11 @@
+PASS #1 [easy] expected=bug got=bug priority=high conf=0.96
+PASS #2 [easy] expected=feature got=feature priority=normal conf=0.9
+PASS #3 [easy] expected=chore got=chore priority=low conf=0.9
+PASS #4 [easy] expected=question got=question priority=normal conf=0.9
+PASS #5 [easy] expected=chore got=chore priority=normal conf=0.9
+PASS #6 [ambiguous] expected=feature got=feature priority=low conf=0.8
+PASS #7 [unsure] expected=other got=other priority=normal conf=0.2
+PASS #8 [unsure] expected=other got=other priority=low conf=0.9
+
+category match: 8/8 = 100%
+'when unsure' cases with confidence < 0.5: 1/2
