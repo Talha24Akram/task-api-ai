@@ -75,3 +75,32 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     first_error = exc.errors()[0]
     field = ".".join(str(p) for p in first_error["loc"] if p != "body")
     return JSONResponse(status_code=400, content={"error": f"{field}: {first_error['msg']}"})
+
+
+# --- read (SQL SELECT) ---------------------------------------------------------
+
+@app.get("/tasks")
+def list_tasks(done: Optional[bool] = None, search: Optional[str] = None):
+    # optional filters are pushed into SQL: WHERE done = ? AND title LIKE ?
+    sql, params = "SELECT id, title, done FROM tasks", []
+    clauses = []
+    if done is not None:
+        clauses.append("done = ?")
+        params.append(int(done))
+    if search:
+        clauses.append("title LIKE ?")
+        params.append(f"%{search}%")
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY id"
+    with db.connect() as conn:
+        return [row_to_task(r) for r in conn.execute(sql, params)]
+
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int):
+    with db.connect() as conn:
+        row = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        raise not_found(task_id)
+    return row_to_task(row)
