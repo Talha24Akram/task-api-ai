@@ -113,3 +113,28 @@ def create_task(payload: TaskCreate):
     with db.connect() as conn:
         cur = conn.execute("INSERT INTO tasks (title, done) VALUES (?, 0)", (payload.title,))
         return {"id": cur.lastrowid, "title": payload.title, "done": False}
+
+
+# --- update & delete (SQL UPDATE / DELETE) --------------------------------------
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, payload: TaskUpdate):
+    with db.connect() as conn:
+        row = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        if row is None:
+            raise not_found(task_id)
+        if payload.title is None and payload.done is None:
+            raise HTTPException(status_code=400, detail="Provide at least title or done")
+        title = payload.title if payload.title is not None else row["title"]
+        done = int(payload.done) if payload.done is not None else row["done"]
+        conn.execute("UPDATE tasks SET title = ?, done = ? WHERE id = ?", (title, done, task_id))
+        return {"id": task_id, "title": title, "done": bool(done)}
+
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    with db.connect() as conn:
+        cur = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        if cur.rowcount == 0:
+            raise not_found(task_id)
+    return None
